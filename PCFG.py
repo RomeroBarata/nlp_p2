@@ -72,6 +72,12 @@ class Rule(object):
     	else:
     		return False
 
+    def printRule(self):
+        print (self.left.tag + ' -> ', end="")
+        for rightSymbol in self.right:
+            print (rightSymbol.tag + ' ', end="")
+        print ("")
+
 # the Grammar has a set of rules. I separated the rules that have terminals 
 # in the right hand side from the other formed only by Variables.
 class Grammar(object):
@@ -102,19 +108,13 @@ class Grammar(object):
     # print the grammar
     def show(self):
         for r in self.rules:
-            print (r.left.tag + ' -> ', end="")
-            for rg in r.right:
-                print (rg.tag + ' ', end="")
-            print ("")
+            r.printRule()
     
     # print the grammar including the terminal rules
     def showAll(self):
         self.show()
         for r in self.terminalRules:
-            print (r.left.tag + ' -> ', end="")
-            for rg in r.right:
-                print (rg.tag + ' ', end="")
-            print ("")
+            r.printRule()
 
 
 # receives a list of sentences and constructs the grammar
