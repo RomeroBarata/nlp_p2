@@ -138,24 +138,34 @@ def processSentence(grammar, tree, first):
     else:
         s = Symbol( getTag(tree.label()) , Symbol.Variable )
     rightSide = []
+    
+    #  the function runs over each child of the current node
     for subTree in tree:
+        
+        # this is the recursive case. the function finds that the node's child
+        # is another tree so it calls itself again to process this tree
         if isinstance(subTree, Tree):
-            # if (subTree.label() != '.' and subTree.label() != ','):
-            if (getTag(subTree.label()).isalpha()):
+            # if (getTag(subTree.label()).isalpha()):
+            if any(c.isalpha() for c in getTag(subTree.label()) ):
                 rightSide.append( Symbol( getTag(subTree.label()), Symbol.Variable ) )
                 processSentence(grammar,subTree, False)
+        
+        # the first base case actually handles malformed trees where
+        # the terminals are tuples instead of strings
         elif isinstance(subTree,tuple):
-            if (getTag(subTree[1]).isalpha()):
-                s = Symbol( getTag(subTree[1]), Symbol.Variable )
+            # if (getTag(subTree[1]).isalpha()):
+            if any(c.isalpha() for c in getTag(subTree[1])):
+                v = Symbol( getTag(subTree[1]), Symbol.Variable )
                 t = Symbol( subTree[0], Symbol.Terminal )
                 rightSide.append( Symbol( getTag(subTree[1]), Symbol.Variable ) )
-                grammar.addRule(Rule(s, [t]))
+                grammar.addRule(Rule(v, [t]))
+        
+        # the base case. the function finds a terminal which is a string
         elif isinstance(subTree,str):
             rightSide.append( Symbol(subTree, Symbol.Terminal) )
                 
     if len(rightSide)>0:
         r = Rule(s, rightSide)
-        # r.printRule()
         grammar.addRule(r)
 
     
