@@ -8,6 +8,7 @@ import functools
 IGNORE_DETAILED_TAGS = True
 
 def getTag(tag):
+    tag.replace('"','\\"')
     if IGNORE_DETAILED_TAGS:
         if '+' in tag:
             tag = tag[:tag.index('+')]
@@ -120,16 +121,18 @@ class Grammar(object):
 # receives a list of sentences and constructs the grammar
 def constructPCFG(treebank):
     grammar = Grammar([])
-
+    i = 0
     for sentence in treebank:
-        processSentences(grammar, sentence, True)
+        print("processing sentence %d" % i)
+        i = i+1
+        processSentence(grammar, sentence, True)
     
     return grammar
 
 
 # recursive function that read each sentence and add the rules to
 # the grammar
-def processSentences(grammar, tree, first):
+def processSentence(grammar, tree, first):
     if first: # first iteration (first variable in the parse tree)
         s = Symbol( getTag(tree.label()) , Symbol.StartSymbol )
     else:
@@ -137,13 +140,23 @@ def processSentences(grammar, tree, first):
     rightSide = []
     for subTree in tree:
         if isinstance(subTree, Tree):
-            if (subTree.label() != '.' and subTree.label() != ','):
+            # if (subTree.label() != '.' and subTree.label() != ','):
+            if (getTag(subTree.label()).isalpha()):
                 rightSide.append( Symbol( getTag(subTree.label()), Symbol.Variable ) )
-                processSentences(grammar,subTree, False)
-        else:
+                processSentence(grammar,subTree, False)
+        elif isinstance(subTree,tuple):
+            if (getTag(subTree[1]).isalpha()):
+                s = Symbol( getTag(subTree[1]), Symbol.Variable )
+                t = Symbol( subTree[0], Symbol.Terminal )
+                rightSide.append( Symbol( getTag(subTree[1]), Symbol.Variable ) )
+                grammar.addRule(Rule(s, [t]))
+        elif isinstance(subTree,str):
             rightSide.append( Symbol(subTree, Symbol.Terminal) )
-    r = Rule(s, rightSide)
-    grammar.addRule(r)
+                
+    if len(rightSide)>0:
+        r = Rule(s, rightSide)
+        # r.printRule()
+        grammar.addRule(r)
 
     
 
