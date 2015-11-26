@@ -10,11 +10,18 @@ IGNORE_DETAILED_TAGS = True
 def getTag(tag):
     tag.replace('"','\\"')
     if IGNORE_DETAILED_TAGS:
-        if '+' in tag:
-            tag = tag[:tag.index('+')]
-        elif '-' in tag:
-            tag = tag[:tag.index('-')]
-        return ''.join(c for c in tag if c.isalpha())
+        pos = [tag.index(ch) for ch in set(tag).intersection(set("+-<>"))]
+        if len(pos)>0:
+            i = min(pos)
+            if i == 0:
+                pos.remove(0)
+                if len(pos)>0:
+                    tag = tag[1:min(pos)]
+                else:
+                    tag = tag[1:]
+            else:
+                tag = tag[:i]
+        return tag
     else:
         return tag
 
@@ -58,6 +65,8 @@ class Rule(object):
     def __init__(self, left, right):
         self.left = left
         self.right = right
+        self.frequency = 1
+        self.prob = 0.0
 
     def __eq__(self,other):
         if isinstance(other, self.__class__):
@@ -77,7 +86,7 @@ class Rule(object):
         print (self.left.tag + ' -> ', end="")
         for rightSymbol in self.right:
             print (rightSymbol.tag + ' ', end="")
-        print ("")
+        print ("  %.2f" % self.prob)
 
 # the Grammar has a set of rules. I separated the rules that have terminals 
 # in the right hand side from the other formed only by Variables.
@@ -85,26 +94,42 @@ class Grammar(object):
     def __init__(self, rules):
         self.rules = []
         self.terminalRules = []
+        self.variablesFreq = {}
 
     def hasRule(self, rule):
-        for r in self.rules:
-            if r == rule:
-                return True
-        return False
+        if rule in self.rules:
+            self.rules[self.rules.index(rule)].frequency += 1
+            return True
+        else:
+            return False
     
     def hasTerminalRule(self, rule):
-        for r in self.terminalRules:
-            if r == rule:
-                return True
-        return False
+        if rule in self.terminalRules:
+            self.terminalRules[self.terminalRules.index(rule)].frequency += 1
+            return True
+        else:
+            return False
 
     def addRule(self, newRule):
-    	if newRule.right[0].type == Symbol.Terminal:
-    	    if not self.hasTerminalRule(newRule):
+        self.addVar(newRule.left.tag)
+        if newRule.right[0].type == Symbol.Terminal:
+            if not self.hasTerminalRule(newRule):
                 bisect.insort(self.terminalRules, newRule)
-    	else:    
-    	    if not self.hasRule(newRule):
-    		    bisect.insort(self.rules, newRule)
+        else:
+            if not self.hasRule(newRule):
+                bisect.insort(self.rules, newRule)
+
+    def addVar(self, var):
+        if not var in self.variablesFreq:
+            self.variablesFreq[var] = 1
+        else:
+            self.variablesFreq[var] += 1
+
+    def calculateProbs(self):
+        for rule in self.rules:
+            rule.prob = rule.frequency / self.variablesFreq[rule.left.tag]
+        for rule in self.terminalRules:
+            rule.prob = rule.frequency / self.variablesFreq[rule.left.tag]
 
     # print the grammar
     def show(self):
@@ -127,6 +152,8 @@ def constructPCFG(treebank):
         i = i+1
         processSentence(grammar, sentence, True)
     
+    grammar.calculateProbs()
+
     return grammar
 
 
