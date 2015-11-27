@@ -8,12 +8,20 @@ import functools
 IGNORE_DETAILED_TAGS = True
 
 def getTag(tag):
+    tag.replace('"','\\"')
     if IGNORE_DETAILED_TAGS:
-        if '+' in tag:
-            tag = tag[:tag.index('+')]
-        elif '-' in tag:
-            tag = tag[:tag.index('-')]
-        return ''.join(c for c in tag if c.isalpha())
+        pos = [tag.index(ch) for ch in set(tag).intersection(set("+-<>"))]
+        if len(pos)>0:
+            i = min(pos)
+            if i == 0:
+                pos.remove(0)
+                if len(pos)>0:
+                    tag = tag[1:min(pos)]
+                else:
+                    tag = tag[1:]
+            else:
+                tag = tag[:i]
+        return tag
     else:
         return tag
 
@@ -57,6 +65,8 @@ class Rule(object):
     def __init__(self, left, right):
         self.left = left
         self.right = right
+        self.frequency = 1
+        self.prob = 0.0
 
     def __eq__(self,other):
         if isinstance(other, self.__class__):
@@ -72,78 +82,118 @@ class Rule(object):
     	else:
     		return False
 
+    def printRule(self):
+        print (self.left.tag + ' -> ', end="")
+        for rightSymbol in self.right:
+            print (rightSymbol.tag + ' ', end="")
+        print ("  %.2f" % self.prob)
+
 # the Grammar has a set of rules. I separated the rules that have terminals 
 # in the right hand side from the other formed only by Variables.
 class Grammar(object):
     def __init__(self, rules):
         self.rules = []
         self.terminalRules = []
+        self.variablesFreq = {}
 
     def hasRule(self, rule):
-        for r in self.rules:
-            if r == rule:
-                return True
-        return False
+        if rule in self.rules:
+            self.rules[self.rules.index(rule)].frequency += 1
+            return True
+        else:
+            return False
     
     def hasTerminalRule(self, rule):
-        for r in self.terminalRules:
-            if r == rule:
-                return True
-        return False
+        if rule in self.terminalRules:
+            self.terminalRules[self.terminalRules.index(rule)].frequency += 1
+            return True
+        else:
+            return False
 
     def addRule(self, newRule):
-    	if newRule.right[0].type == Symbol.Terminal:
-    	    if not self.hasTerminalRule(newRule):
+        self.addVar(newRule.left.tag)
+        if newRule.right[0].type == Symbol.Terminal:
+            if not self.hasTerminalRule(newRule):
                 bisect.insort(self.terminalRules, newRule)
-    	else:    
-    	    if not self.hasRule(newRule):
-    		    bisect.insort(self.rules, newRule)
+        else:
+            if not self.hasRule(newRule):
+                bisect.insort(self.rules, newRule)
+
+    def addVar(self, var):
+        if not var in self.variablesFreq:
+            self.variablesFreq[var] = 1
+        else:
+            self.variablesFreq[var] += 1
+
+    def calculateProbs(self):
+        for rule in self.rules:
+            rule.prob = rule.frequency / self.variablesFreq[rule.left.tag]
+        for rule in self.terminalRules:
+            rule.prob = rule.frequency / self.variablesFreq[rule.left.tag]
 
     # print the grammar
     def show(self):
         for r in self.rules:
-            print (r.left.tag + ' -> ', end="")
-            for rg in r.right:
-                print (rg.tag + ' ', end="")
-            print ("")
+            r.printRule()
     
     # print the grammar including the terminal rules
     def showAll(self):
         self.show()
         for r in self.terminalRules:
-            print (r.left.tag + ' -> ', end="")
-            for rg in r.right:
-                print (rg.tag + ' ', end="")
-            print ("")
+            r.printRule()
 
 
 # receives a list of sentences and constructs the grammar
 def constructPCFG(treebank):
     grammar = Grammar([])
-
+    i = 0
     for sentence in treebank:
-        processSentences(grammar, sentence, True)
+        print("processing sentence %d" % i)
+        i = i+1
+        processSentence(grammar, sentence, True)
     
+    grammar.calculateProbs()
+
     return grammar
 
 
 # recursive function that read each sentence and add the rules to
 # the grammar
-def processSentences(grammar, tree, first):
+def processSentence(grammar, tree, first):
     if first: # first iteration (first variable in the parse tree)
         s = Symbol( getTag(tree.label()) , Symbol.StartSymbol )
     else:
         s = Symbol( getTag(tree.label()) , Symbol.Variable )
     rightSide = []
+    
+    #  the function runs over each child of the current node
     for subTree in tree:
+        
+        # this is the recursive case. the function finds that the node's child
+        # is another tree so it calls itself again to process this tree
         if isinstance(subTree, Tree):
-            if (subTree.label() != '.' and subTree.label() != ','):
+            # if (getTag(subTree.label()).isalpha()):
+            if any(c.isalpha() for c in getTag(subTree.label()) ):
                 rightSide.append( Symbol( getTag(subTree.label()), Symbol.Variable ) )
-                processSentences(grammar,subTree, False)
-        else:
+                processSentence(grammar,subTree, False)
+        
+        # the first base case actually handles malformed trees where
+        # the terminals are tuples instead of strings
+        elif isinstance(subTree,tuple):
+            # if (getTag(subTree[1]).isalpha()):
+            if any(c.isalpha() for c in getTag(subTree[1])):
+                v = Symbol( getTag(subTree[1]), Symbol.Variable )
+                t = Symbol( subTree[0], Symbol.Terminal )
+                rightSide.append( Symbol( getTag(subTree[1]), Symbol.Variable ) )
+                grammar.addRule(Rule(v, [t]))
+        
+        # the base case. the function finds a terminal which is a string
+        elif isinstance(subTree,str):
             rightSide.append( Symbol(subTree, Symbol.Terminal) )
-    r = Rule(s, rightSide)
-    grammar.addRule(r)
+                
+    if len(rightSide)>0:
+        r = Rule(s, rightSide)
+        grammar.addRule(r)
 
     
 
